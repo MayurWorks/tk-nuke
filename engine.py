@@ -159,6 +159,41 @@ class NukeEngine(sgtk.platform.Engine):
 
         self.logger.debug("%s: Initializing...", self)
 
+        # Fork addition (MayurWorks): ensure folders exist for the current
+        # Task before any apps are loaded/validated below. This runs at the
+        # earliest point in engine startup, before tk-multi-workfiles2 (and
+        # any other app whose config validation depends on template data
+        # resolving from the path cache) is instantiated. Without this,
+        # missing folders under any part of the schema (e.g. Publish/) cause
+        # tk-multi-workfiles2's environment-load-time validation to fail
+        # with a MissingTemplatesError / App configuration Error, and it
+        # never loads at all for that session.
+        #
+        # tk-multi-launchapp's before_app_launch hook was the originally
+        # intended place for this (per ShotGrid's own docs), but was
+        # confirmed via diagnostic logging to never fire for this site's
+        # Desktop launch path (use_software_entity: true bypasses it), so
+        # this engine-level hook is used instead - it is guaranteed to run
+        # for every Nuke session regardless of how Desktop launched it.
+        task_entity = None
+        if self.context and self.context.task:
+            task_entity = self.context.task
+        if task_entity is not None:
+            try:
+                self.sgtk.create_filesystem_structure(
+                    "Task", task_entity["id"], engine="tk-nuke"
+                )
+                self.logger.debug(
+                    "Ensured folders exist for Task %s (engine=tk-nuke)",
+                    task_entity["id"],
+                )
+            except Exception as e:
+                self.logger.error(
+                    "Failed to create filesystem structure for Task %s: %s",
+                    task_entity["id"],
+                    e,
+                )
+
         import tk_nuke
 
         tk_nuke.tank_ensure_callbacks_registered(engine=self)
