@@ -260,6 +260,17 @@ class NukeSessionCollector(HookBaseClass):
         :param parent_item: The parent item for any nodes collected
         """
 
+        # Write nodes managed by tk-nuke-writenode are collected, with full
+        # metadata and its published-status check, by collect_sg_writenodes().
+        # They are plain "Write" nodes now, so without this skip they were
+        # ALSO collected here as a second, bare item for the same render
+        # (confirmed on a live run) - which shows up as a duplicate entry
+        # in the publish UI and bypasses the already-published check.
+        managed_write_nodes = set()
+        sg_writenode_app = self.parent.engine.apps.get("tk-nuke-writenode")
+        if sg_writenode_app:
+            managed_write_nodes = set(sg_writenode_app.get_all_write_nodes())
+
         # iterate over all the known output types
         for node_type in _NUKE_OUTPUTS:
 
@@ -270,6 +281,9 @@ class NukeSessionCollector(HookBaseClass):
 
             # iterate over each instance
             for node in all_nodes_of_type:
+
+                if node.name() in managed_write_nodes:
+                    continue
 
                 param_name = _NUKE_OUTPUTS[node_type]
 
